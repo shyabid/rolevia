@@ -201,22 +201,18 @@ class RoleSelectView(View):
         super().__init__()
         self.questions = questions
         self.guild = interaction.guild
-        options = [
-            discord.SelectOption(label=role.name, value=str(role.id))
-            for role in self.guild.roles 
-            if not role.managed and role.name != "@everyone"
-        ]
-        self.role_select = Select(
-            placeholder="Choose a role", 
-            options=options,
-            disabled=False  # Add this
+        
+        self.role_select = discord.ui.RoleSelect(
+            placeholder="Choose a role",
+            min_values=1,
+            max_values=1,
+            disabled=False 
         )
         self.role_select.callback = self.role_selected
         self.add_item(self.role_select)
 
     async def role_selected(self, interaction: discord.Interaction):
-        role_id = int(self.role_select.values[0])
-        role = interaction.guild.get_role(role_id)
+        role = self.role_select.values[0]
         
         self.role_select.disabled = True
         await interaction.response.edit_message(
@@ -226,7 +222,7 @@ class RoleSelectView(View):
         
         quiz_data = {
             "questions": self.questions,
-            "role_id": role_id
+            "role_id": role.id
         }
         
         await interaction.followup.send(
@@ -234,6 +230,7 @@ class RoleSelectView(View):
             view=PassingPercentageView(quiz_data),
             ephemeral=True
         )
+
 
 class QuizStartModal(Modal):
     def __init__(self):
@@ -379,6 +376,13 @@ class QuestionButton(Button):
             quiz_view.correct_answers += 1
 
         quiz_view.current_question += 1
+        
+        if quiz_view.current_message:
+            try:
+                await quiz_view.current_message.delete()
+            except:
+                pass
+
         # Handle next question or finish
         question_data = quiz_view.quiz_data["questions"][quiz_view.current_question] if quiz_view.current_question < quiz_view.total_questions else None
         
