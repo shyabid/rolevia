@@ -339,10 +339,11 @@ class QuizView:
         options_text = "\n".join(f"{i}. {option.strip()}" for i, option in enumerate(question_data["options"], 1))
         
         embed = discord.Embed(
-            title=f"Question {self.current_question + 1}/{self.total_questions}",
-            description=f"{question_data['question']}\n\n{options_text}",
+            description=f"**{question_data['question']}**\n\n{options_text}",
             color=discord.Color.purple()
         )
+        
+        embed.set_author(name=f"Question {self.current_question + 1}/{self.total_questions}")
         if question_data["imglink"]:
             embed.set_image(url=question_data["imglink"])
         return embed
