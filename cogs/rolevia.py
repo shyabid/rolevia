@@ -379,13 +379,6 @@ class QuestionButton(Button):
             quiz_view.correct_answers += 1
 
         quiz_view.current_question += 1
-        
-        if quiz_view.current_message:
-            try:
-                await quiz_view.current_message.delete()
-            except:
-                pass
-
         # Handle next question or finish
         question_data = quiz_view.quiz_data["questions"][quiz_view.current_question] if quiz_view.current_question < quiz_view.total_questions else None
         
