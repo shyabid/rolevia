@@ -335,10 +335,13 @@ class QuizView:
         self.current_message = await interaction.original_response()
 
     def create_question_embed(self, question_data):
+        # Create numbered options list
+        options_text = "\n".join(f"**__{i}.__** {option.strip()}" for i, option in enumerate(question_data["options"], 1))
+        
         embed = discord.Embed(
             title=f"Question {self.current_question + 1}/{self.total_questions}",
-            description=question_data["question"],
-            color=discord.Color.purple()  # Change to purple
+            description=f"{question_data['question']}\n\n{options_text}",
+            color=discord.Color.purple()
         )
         if question_data["imglink"]:
             embed.set_image(url=question_data["imglink"])
@@ -362,7 +365,7 @@ class QuestionButton(Button):
     def __init__(self, number, option):
         super().__init__(
             style=discord.ButtonStyle.secondary,
-            label=f"{number}. {option}",
+            label=str(number),  # Just show the number
             custom_id=str(number)
         )
 
