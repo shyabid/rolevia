@@ -336,7 +336,7 @@ class QuizView:
 
     def create_question_embed(self, question_data):
         # Create numbered options list
-        options_text = "\n".join(f"**__{i}.__** {option.strip()}" for i, option in enumerate(question_data["options"], 1))
+        options_text = "\n".join(f"{i}. {option.strip()}" for i, option in enumerate(question_data["options"], 1))
         
         embed = discord.Embed(
             title=f"Question {self.current_question + 1}/{self.total_questions}",
