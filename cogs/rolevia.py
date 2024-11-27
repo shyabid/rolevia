@@ -19,7 +19,8 @@ class Rolevia(commands.Cog):
         pass
     
     @rolevia.command(
-        name="create"
+        name="create",
+        description="Create a new Rolevia quiz."
     )
     @commands.has_permissions(manage_roles=True)
     async def create(
@@ -228,6 +229,23 @@ class RoleSelectView(View):
             ephemeral=True
         )
 
+class QuizStartModal(Modal):
+    def __init__(self):
+        super().__init__(title="Quiz Start Message Settings")
+        self.title_input = TextInput(
+            label="Embed Title",
+            placeholder="Quiz Available!",
+            required=False
+        )
+        self.description_input = TextInput(
+            label="Embed Description",
+            style=discord.TextStyle.paragraph,
+            placeholder="Take this quiz to earn the role!",
+            required=False
+        )
+        self.add_item(self.title_input)
+        self.add_item(self.description_input)
+
 class PassingPercentageView(View):
     def __init__(self, quiz_data):
         super().__init__()
@@ -246,19 +264,34 @@ class PassingPercentageView(View):
         passing_percentage = int(self.percent_select.values[0])
         self.quiz_data["passing_percentage"] = passing_percentage
         
-        # Disable the select
-        self.percent_select.disabled = True
-        await interaction.response.edit_message(
-            content=f"Selected passing percentage: {passing_percentage}%",
-            view=self
-        )
+        # Show modal first
+        modal = QuizStartModal()
+        await interaction.response.send_modal(modal)
+        await modal.wait()
+        
+        # After modal is submitted, update the original message
+        try:
+            await interaction.message.edit(
+                content=f"Selected passing percentage: {passing_percentage}%",
+                view=None  # Remove the view since we're done with it
+            )
+        except:
+            pass  # Ignore any edit errors
 
-        # Send the quiz start message
+        # Get role and create embed
         role = interaction.guild.get_role(self.quiz_data["role_id"])
+        
+        # Use custom title/description if provided, otherwise use defaults
+        title = modal.title_input.value if modal.title_input.value else "Quiz Available!"
+        description = (
+            modal.description_input.value if modal.description_input.value 
+            else f"Take this quiz to earn the {role.mention} role!\nPassing score: {passing_percentage}%"
+        )
+        
         embed = discord.Embed(
-            title="Quiz Available!",
-            description=f"Take this quiz to earn the {role.mention} role!\nPassing score: {passing_percentage}%",
-            color=discord.Color.blue()
+            title=title,
+            description=description,
+            color=discord.Color.purple()
         )
         
         await interaction.channel.send(
@@ -299,7 +332,7 @@ class QuizView:
         embed = discord.Embed(
             title=f"Question {self.current_question + 1}/{self.total_questions}",
             description=question_data["question"],
-            color=discord.Color.blue()
+            color=discord.Color.purple()  # Change to purple
         )
         if question_data["imglink"]:
             embed.set_image(url=question_data["imglink"])
@@ -361,7 +394,7 @@ class QuestionButton(Button):
             embed = discord.Embed(
                 title="Quiz Results",
                 description=f"Score: {quiz_view.correct_answers}/{quiz_view.total_questions} ({quiz_view.correct_answers / quiz_view.total_questions * 100:.2f}%)",
-                color=discord.Color.green() if passed else discord.Color.red()
+                color=discord.Color.purple()  # Change to purple
             )
 
             if passed:
