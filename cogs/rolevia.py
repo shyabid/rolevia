@@ -164,7 +164,10 @@ class QuestionModal(Modal):
             style=discord.TextStyle.paragraph,
             placeholder="Option 1|Option 2|Option 3|Option 4"
         )
-        self.correct_answer_input = TextInput(label="Correct Answer (number):")
+        self.correct_answer_input = TextInput(
+            label="Correct Answer(s) (numbers separated by |):",
+            placeholder="1|2|3 or just 1"
+        )
         self.imglink_input = TextInput(label="Image Link:", required=False)
         self.add_item(self.question_input)
         self.add_item(self.options_input)
@@ -173,10 +176,13 @@ class QuestionModal(Modal):
         self.question_data = {}
 
     async def on_submit(self, interaction: discord.Interaction):
+        # Convert correct answers string to list of integers
+        correct_answers = [int(x.strip()) for x in self.correct_answer_input.value.split('|')]
+        
         self.question_data = {
             "question": self.question_input.value,
             "options": self.options_input.value.split('|'),
-            "correct_answer": int(self.correct_answer_input.value),
+            "correct_answers": correct_answers,  # Changed from correct_answer to correct_answers
             "imglink": self.imglink_input.value
         }
         try:
@@ -361,22 +367,21 @@ class QuestionButton(Button):
         )
 
     async def callback(self, interaction: discord.Interaction):
-        # First defer the response
         await interaction.response.defer(ephemeral=True)
         
         quiz_view = self.view.quiz_view
-        if int(self.custom_id) == self.view.question_data["correct_answer"]:
+        # Check if selected answer is in the list of correct answers
+        if int(self.custom_id) in self.view.question_data["correct_answers"]:
             quiz_view.correct_answers += 1
 
         quiz_view.current_question += 1
         
-        # Try to delete the previous message
         if quiz_view.current_message:
             try:
                 await quiz_view.current_message.delete()
             except:
-                pass  # Ignore if message is already deleted
-        
+                pass
+
         # Handle next question or finish
         question_data = quiz_view.quiz_data["questions"][quiz_view.current_question] if quiz_view.current_question < quiz_view.total_questions else None
         
@@ -394,7 +399,6 @@ class QuestionButton(Button):
             embed = discord.Embed(
                 title="Quiz Results",
                 description=f"Score: {quiz_view.correct_answers}/{quiz_view.total_questions} ({quiz_view.correct_answers / quiz_view.total_questions * 100:.2f}%)",
-                color=discord.Color.purple()  # Change to purple
             )
 
             if passed:
@@ -404,12 +408,13 @@ class QuestionButton(Button):
                     name="Congratulations!", 
                     value=f"You passed and received the {role.mention} role!"
                 )
+                embed.color = discord.Color.green()
             else:
                 embed.add_field(
                     name="Sorry!", 
                     value="You did not pass the quiz. Try again!"
                 )
-
+                embed.color = discord.Color.red()
             await interaction.followup.send(embed=embed, ephemeral=True)
 
 async def setup(bot):
