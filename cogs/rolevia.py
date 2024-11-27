@@ -263,8 +263,7 @@ class PassingPercentageView(View):
         
         await interaction.channel.send(
             embed=embed,
-            view=QuizStartView(self.quiz_data),
-            ephemeral=False
+            view=QuizStartView(self.quiz_data)
         )
 
 class QuizStartView(View):
