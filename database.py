@@ -55,6 +55,17 @@ class Database:
             )
         ''')
         
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS quiz_messages (
+                message_id INTEGER PRIMARY KEY,
+                channel_id INTEGER NOT NULL,
+                guild_id INTEGER NOT NULL,
+                quiz_id INTEGER NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (quiz_id) REFERENCES quiz_data (id)
+            )
+        ''')
+        
         conn.commit()
     
     def save_quiz(self, guild_id: int, questions: List[Dict], role_id: int, passing_percentage: int) -> int:
@@ -158,6 +169,28 @@ class Database:
         
         rows = cursor.fetchall()
         return [dict(row) for row in rows]
+    
+    def save_quiz_message(self, message_id: int, channel_id: int, guild_id: int, quiz_id: int):
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        
+        cursor.execute('''
+            INSERT OR REPLACE INTO quiz_messages (message_id, channel_id, guild_id, quiz_id)
+            VALUES (?, ?, ?, ?)
+        ''', (message_id, channel_id, guild_id, quiz_id))
+        
+        conn.commit()
+    
+    def get_quiz_from_message(self, message_id: int) -> Optional[int]:
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        
+        cursor.execute('''
+            SELECT quiz_id FROM quiz_messages WHERE message_id = ?
+        ''', (message_id,))
+        
+        row = cursor.fetchone()
+        return row['quiz_id'] if row else None
 
 # Global database instance
 db = Database()

@@ -12,9 +12,8 @@ class Rolevia(commands.Cog):
         
     @commands.Cog.listener()
     async def on_ready(self):
-        # Register persistent views for all existing quizzes
-        # This ensures buttons work after bot restart
-        pass
+        # Register persistent views to ensure buttons work after bot restart
+        self.bot.add_view(PersistentQuizStartView())
 
     @commands.command()
     async def sync(self, ctx):
@@ -43,8 +42,8 @@ class Rolevia(commands.Cog):
                 inline=False
             )
             embed.add_field(
-                name="/rolevia webhook <url>", 
-                value="Set up a webhook for sending quiz embeds", 
+                name="/rolevia webhook <channel>", 
+                value="Create a webhook in the specified channel for quiz embeds", 
                 inline=False
             )
             embed.add_field(
@@ -95,32 +94,47 @@ class Rolevia(commands.Cog):
         description="Set up a webhook for sending quiz embeds."
     )
     @commands.has_permissions(manage_roles=True)
-    async def webhook(self, ctx: discord.ext.commands.Context, webhook_url: str):
-        # Validate webhook URL
-        if not webhook_url.startswith("https://discord.com/api/webhooks/"):
+    async def webhook(self, ctx: discord.ext.commands.Context, channel: discord.TextChannel):
+        # Create a webhook for the specified channel
+        try:
+            webhook = await channel.create_webhook(
+                name=f"Rolevia - {ctx.guild.name}",
+                reason="Created by Rolevia bot for quiz embeds"
+            )
+            
+            db.set_webhook_url(ctx.guild.id, webhook.url)
+            
             embed = discord.Embed(
-                title="Invalid Webhook URL",
-                description="Please provide a valid Discord webhook URL.",
+                title="Webhook Created",
+                description=f"Created webhook in {channel.mention}. Quiz embeds will now be sent with server avatar and name.",
+                color=discord.Color.green()
+            )
+            
+            if ctx.interaction:
+                await ctx.interaction.response.send_message(embed=embed, ephemeral=True)
+            else:
+                await ctx.send(embed=embed)
+                
+        except discord.Forbidden:
+            embed = discord.Embed(
+                title="Permission Error",
+                description="I don't have permission to create webhooks in that channel.",
                 color=discord.Color.red()
             )
             if ctx.interaction:
                 await ctx.interaction.response.send_message(embed=embed, ephemeral=True)
             else:
                 await ctx.send(embed=embed)
-            return
-        
-        db.set_webhook_url(ctx.guild.id, webhook_url)
-        
-        embed = discord.Embed(
-            title="Webhook Set",
-            description="Quiz embeds will now be sent via webhook with server avatar and name.",
-            color=discord.Color.green()
-        )
-        
-        if ctx.interaction:
-            await ctx.interaction.response.send_message(embed=embed, ephemeral=True)
-        else:
-            await ctx.send(embed=embed)
+        except Exception as e:
+            embed = discord.Embed(
+                title="Error",
+                description=f"Failed to create webhook: {str(e)}",
+                color=discord.Color.red()
+            )
+            if ctx.interaction:
+                await ctx.interaction.response.send_message(embed=embed, ephemeral=True)
+            else:
+                await ctx.send(embed=embed)
 
     @rolevia.command(
         name="send",
@@ -223,10 +237,12 @@ class SendQuizModal(Modal):
             if webhook_url:
                 await self.send_via_webhook(webhook_url, embed, quiz_data, interaction.guild, channel)
             else:
-                await channel.send(
+                message = await channel.send(
                     embed=embed,
                     view=QuizStartView(quiz_data)
                 )
+                # Save message-quiz mapping for persistent button handling
+                db.save_quiz_message(message.id, channel.id, interaction.guild.id, quiz_data['id'])
             
             await interaction.response.send_message(f"Quiz sent to {channel.mention}!", ephemeral=True)
             
@@ -239,19 +255,26 @@ class SendQuizModal(Modal):
         # Create webhook from URL if it doesn't exist, or use the channel's webhook
         try:
             webhook = discord.Webhook.from_url(webhook_url, session=aiohttp.ClientSession())
-            await webhook.send(
+            message = await webhook.send(
                 embed=embed,
                 username=guild.name,
                 avatar_url=str(guild.icon.url) if guild.icon else None,
-                view=PersistentQuizStartView(quiz_data['id'])
+                view=PersistentQuizStartView(quiz_data['id']),
+                wait=True
             )
             await webhook.session.close()
+            
+            # Save message-quiz mapping for persistent button handling
+            db.save_quiz_message(message.id, channel.id, guild.id, quiz_data['id'])
+            
         except Exception as e:
             # Fallback to regular channel send if webhook fails
-            await channel.send(
+            message = await channel.send(
                 embed=embed,
                 view=PersistentQuizStartView(quiz_data['id'])
             )
+            # Save message-quiz mapping for persistent button handling
+            db.save_quiz_message(message.id, channel.id, guild.id, quiz_data['id'])
             raise Exception(f"Webhook failed: {str(e)}")
 
 class CreateRoleviaView(View):
@@ -463,28 +486,11 @@ class PersistentQuizStartView(View):
     def __init__(self, quiz_id: int = None):
         super().__init__(timeout=None)
         self.quiz_id = quiz_id
-        custom_id = f"start_quiz_{quiz_id}" if quiz_id else "start_quiz"
-        self.start_button = discord.ui.Button(
-            label="Start Quiz", 
-            style=discord.ButtonStyle.success, 
-            custom_id=custom_id
-        )
-        self.start_button.callback = self.start_quiz_callback
-        self.add_item(self.start_button)
 
-    async def start_quiz_callback(self, interaction: discord.Interaction):
-        # Extract quiz ID from custom_id
-        custom_id = interaction.data['custom_id']
-        if custom_id.startswith("start_quiz_"):
-            quiz_id = int(custom_id.split("_")[-1])
-            quiz_data = db.get_quiz(quiz_id)
-            if quiz_data:
-                quiz_view = QuizView(quiz_data, interaction.user)
-                await quiz_view.start_quiz(interaction)
-            else:
-                await interaction.response.send_message("Quiz not found!", ephemeral=True)
-        else:
-            await interaction.response.send_message("Invalid quiz button!", ephemeral=True)
+    @discord.ui.button(label="Start Quiz", style=discord.ButtonStyle.success, custom_id="quiz_start_button")
+    async def start_quiz(self, interaction: discord.Interaction, button: Button):
+        # This will be handled by the global interaction handler in bot.py
+        pass
 
 class QuizView:
     def __init__(self, quiz_data, user):

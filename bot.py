@@ -16,23 +16,29 @@ class Bot(commands.Bot):
 
     async def on_ready(self):
         print(f'Logged on as {self.user} (ID: {self.user.id})')
+        await self.tree.sync()
         
     async def on_interaction(self, interaction: discord.Interaction):
         # Handle persistent view interactions for quiz buttons
         if interaction.type == discord.InteractionType.component:
-            if interaction.data.get('custom_id', '').startswith('start_quiz_'):
+            custom_id = interaction.data.get('custom_id', '')
+            
+            if custom_id == 'quiz_start_button':
                 # Import here to avoid circular imports
                 from cogs.rolevia import QuizView
                 
-                custom_id = interaction.data['custom_id']
-                quiz_id = int(custom_id.split('_')[-1])
-                quiz_data = db.get_quiz(quiz_id)
+                # Get quiz ID from message mapping
+                quiz_id = db.get_quiz_from_message(interaction.message.id)
                 
-                if quiz_data:
-                    quiz_view = QuizView(quiz_data, interaction.user)
-                    await quiz_view.start_quiz(interaction)
+                if quiz_id:
+                    quiz_data = db.get_quiz(quiz_id)
+                    if quiz_data:
+                        quiz_view = QuizView(quiz_data, interaction.user)
+                        await quiz_view.start_quiz(interaction)
+                    else:
+                        await interaction.response.send_message("Quiz not found!", ephemeral=True)
                 else:
-                    await interaction.response.send_message("Quiz not found!", ephemeral=True)
+                    await interaction.response.send_message("Quiz not found for this message!", ephemeral=True)
                 return
         
         # Let other interactions be handled normally
